@@ -1,0 +1,8 @@
+.generated_files
+mcc_generated_files
+dist
+debug
+build
+nbproject
+MyConfig.mc3
+Makefile
