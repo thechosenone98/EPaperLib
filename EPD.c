@@ -17,7 +17,7 @@
 #include "mcc_generated_files/pin_manager.h"
 
 // <editor-fold defaultstate="collapsed" desc="EPD Global Variables">
-bool using_partial_mode = true;
+bool using_partial_mode = false;
 bool use_partial_update_window = true;
 bool initial_write = true;
 bool powered = false;
@@ -159,6 +159,7 @@ void InitDisplay(void){
 void InitFullMode(void){
     InitDisplay();
     PowerOn();
+    using_partial_mode = false;
 }
 
 void InitPartMode(void){
@@ -166,6 +167,7 @@ void InitPartMode(void){
     InitDisplay();
     SendCommand(&vcom_data_interval_part_cmd);
     PowerOn();
+    using_partial_mode = true;
 }
 
 void PowerOn(void){
@@ -235,13 +237,8 @@ void WriteScreenBuffer(uint8_t black_value)
     InitPartMode();
     SendCommand(&partial_in_cmd); // partial in
     SetPartialRamArea(0, 0, WIDTH, HEIGHT);
-    SendCommand(&data_start_old_cmd);
-    uint32_t i = 0;
-    for (i = 0; i < (uint32_t)WIDTH * (uint32_t)HEIGHT / 8; i++)
-    {
-      SendData(0xFF);
-    }
     SendCommand(&data_start_new_cmd);
+    uint32_t i = 0;
     for (i = 0; i < (uint32_t)WIDTH * (uint32_t)HEIGHT / 8; i++)
     {
       SendData(black_value);
@@ -257,14 +254,10 @@ void ClearScreen(uint8_t color){
     //Partial In
     SendCommand(&partial_in_cmd);
     SetPartialRamArea(0, 0, WIDTH, HEIGHT);
-    //Start OLD data transmission (always send a white (0xFF) clear screen)
-    SendCommand(&data_start_old_cmd);
-    uint32_t i = 0;
-    for(i = 0; i < (uint32_t)WIDTH * HEIGHT / 8; ++i)
-        SendData(0xFF);
     //Start NEW data transmission 2
     SendCommand(&data_start_new_cmd);
     //Set all of these to color
+    uint32_t i = 0;
     for(i = 0; i < (uint32_t)WIDTH * HEIGHT / 8; ++i)
         SendData(color);
     Update();
@@ -290,18 +283,8 @@ void WriteImage(const uint8_t *bitmap, uint16_t x, uint16_t y, uint16_t w, uint1
     //Start Partial Mode
     SendCommand(&partial_in_cmd);
     SetPartialRamArea(x1, y1, w1, h1);
-    SendCommand(&data_start_old_cmd);
     uint16_t i = 0;
     uint16_t j = 0;
-    for (i = 0; i < h1; i++){
-        for (j = 0; j < w1 / 8; j++){
-            uint8_t data;
-            int16_t idx = mirror_y ? j + dx / 8 + ((h - 1 - (i + dy))) * wb : j + dx / 8 + (i + dy) * wb;
-            data = bitmap[idx];
-            if (invert) data = ~data;
-            SendData(data);
-        }
-    }
     SendCommand(&data_start_new_cmd);
     for (i = 0; i < h1; i++){
         for (j = 0; j < w1 / 8; j++){
@@ -317,7 +300,7 @@ void WriteImage(const uint8_t *bitmap, uint16_t x, uint16_t y, uint16_t w, uint1
 
 void WriteImagePart(const uint8_t* bitmap, uint16_t x_part, uint16_t y_part, uint16_t w_bitmap, uint16_t h_bitmap,
                    uint16_t x, uint16_t y, uint16_t w, uint16_t h, bool invert, bool mirror_y){
-    if (initial_write) ClearScreen(0x00); // initial full screen buffer clean
+    if (initial_write) WriteScreenBuffer(0x00); // initial full screen buffer clean
     printf("FIRST TEST");
     if ((w_bitmap < 0) || (h_bitmap < 0) || (w < 0) || (h < 0)) return;
     printf("SECOND TEST");
@@ -325,42 +308,32 @@ void WriteImagePart(const uint8_t* bitmap, uint16_t x_part, uint16_t y_part, uin
     printf("THIRD TEST");
     if ((y_part < 0) || (y_part >= h_bitmap)) return;
     printf("BUNCH OF MATH");
-    int16_t wb_bitmap = (w_bitmap + 7) / 8; // width bytes, bitmaps are padded
-    x_part -= x_part % 8; // byte boundary
-    w = w_bitmap - x_part < w ? w_bitmap - x_part : w; // limit
-    h = h_bitmap - y_part < h ? h_bitmap - y_part : h; // limit
-    x -= x % 8; // byte boundary
-    w = 8 * ((w + 7) / 8); // byte boundary, bitmaps are padded
-    int16_t x1 = x < 0 ? 0 : x; // limit
-    int16_t y1 = y < 0 ? 0 : y; // limit
-    int16_t w1 = x + w < (int16_t)WIDTH ? w : (int16_t)WIDTH - x; // limit
-    int16_t h1 = y + h < (int16_t)HEIGHT ? h : (int16_t)HEIGHT - y; // limit
-    int16_t dx = x1 - x;
-    int16_t dy = y1 - y;
-    w1 -= dx;
-    h1 -= dy;
+//    int16_t wb_bitmap = (w_bitmap + 7) / 8; // width bytes, bitmaps are padded
+//    x_part -= x_part % 8; // byte boundary
+//    w = w_bitmap - x_part < w ? w_bitmap - x_part : w; // limit
+//    h = h_bitmap - y_part < h ? h_bitmap - y_part : h; // limit
+//    x -= x % 8; // byte boundary
+//    w = 8 * ((w + 7) / 8); // byte boundary, bitmaps are padded
+//    int16_t x1 = x < 0 ? 0 : x; // limit
+//    int16_t y1 = y < 0 ? 0 : y; // limit
+//    int16_t w1 = x + w < (int16_t)WIDTH ? w : (int16_t)WIDTH - x; // limit
+//    int16_t h1 = y + h < (int16_t)HEIGHT ? h : (int16_t)HEIGHT - y; // limit
+//    int16_t dx = x1 - x;
+//    int16_t dy = y1 - y;
+//    w1 -= dx;
+//    h1 -= dy;
     printf("LAST TEST");
-    if ((w1 <= 0) || (h1 <= 0)) return;
+//    if ((x + w <= 0) || (y + h <= 0)) return;
     if (!using_partial_mode) InitPartMode();
     SendCommand(&partial_in_cmd);
-    SetPartialRamArea(x1, y1, w1, h1);
-    SendCommand(&data_start_old_cmd);
+    SetPartialRamArea(x, y, x + w, y + h);
+    SendCommand(&data_start_new_cmd);
     int16_t i = 0;
     int16_t j = 0;
-    for (i = 0; i < h1; i++){
-        for (j = 0; j < w1 / 8; j++){
+    for (i = y_part; i < h_bitmap; i++){
+        for (j = x_part / 8; j < w_bitmap / 8; j++){
             uint8_t data;
-            int16_t idx = mirror_y ? x_part / 8 + j + dx / 8 + ((h_bitmap - 1 - (y_part + i + dy))) * wb_bitmap : x_part / 8 + j + dx / 8 + (y_part + i + dy) * wb_bitmap;
-            data = bitmap[idx];
-            if (invert) data = ~data;
-            SendData(data);
-        }
-    }
-    SendCommand(&data_start_new_cmd);
-    for (i = 0; i < h1; i++){
-        for (j = 0; j < w1 / 8; j++){
-            uint8_t data;
-            int16_t idx = mirror_y ? x_part / 8 + j + dx / 8 + ((h_bitmap - 1 - (y_part + i + dy))) * wb_bitmap : x_part / 8 + j + dx / 8 + (y_part + i + dy) * wb_bitmap;
+            int16_t idx = j + i * (w_bitmap / 8);
             data = bitmap[idx];
             if (invert) data = ~data;
             SendData(data);
