@@ -72,7 +72,7 @@ int main(void)
     else
         _RB3 = 1;
     //Initialize EPD
-    DrawImagePart(gImage_epaper_image, 0, 0, WIDTH-32, HEIGHT, 0, 0, WIDTH-32, HEIGHT, true, false);
+    DrawImagePart(gImage_epaper_image, WIDTH, HEIGHT, 0, 0, WIDTH-32, HEIGHT-32, 0, 0, WIDTH-32, HEIGHT-32, true, true);
     //DrawImage(gImage_epaper_image, 0, 0, WIDTH, HEIGHT, true, false);
     while (1)
     {

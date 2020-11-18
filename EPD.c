@@ -197,15 +197,21 @@ void Reset(void){
 
 void SetPartialRamArea(uint16_t x, uint16_t y, uint16_t w, uint16_t h){
     printf("SET PARTIAL RAM AREA\n");
-    uint16_t xe = (x + w - 1) | 0x0007; // byte boundary inclusive (last byte)
-    uint16_t ye = y + h - 1;
-    x &= (uint16_t)0xFFF8; // byte boundary
-    partial_window_cmd.parameter[0] = x % 256;
-    partial_window_cmd.parameter[1] = xe % 256;
+//    uint16_t xe = (x + w - 1) | 0x0007; // byte boundary inclusive (last byte)
+//    uint16_t ye = y + h - 1;
+//    x &= (uint16_t)0xFFF8; // byte boundary
+    partial_window_cmd.parameter[0] = x;
+    printf("X START : %u\n", x);
+    partial_window_cmd.parameter[1] = x + w - 1;
+    printf("X END : %u\n", x+w-1);
     partial_window_cmd.parameter[2] = y / 256;
+    printf("Y START 1 : %u\n", y/256);
     partial_window_cmd.parameter[3] = y % 256;
-    partial_window_cmd.parameter[4] = ye / 256;
-    partial_window_cmd.parameter[5] = ye % 256;
+    printf("Y START 2 : %u\n", y%256);
+    partial_window_cmd.parameter[4] = (y + h) / 256;
+    printf("Y END 1 : %u\n", (y+h)/256);
+    partial_window_cmd.parameter[5] = (y + h) % 256 - 1;
+    printf("Y END 2 : %u\n", (y + h) % 256 - 1);
     SendCommand(&partial_window_cmd); // partial window
 }
 
@@ -217,16 +223,16 @@ void Update(void){
 
 void Refresh(uint16_t x, uint16_t y, uint16_t w, uint16_t h){
     printf("REFRESH\n");
-    x -= x % 8; // byte boundary
-    w -= x % 8; // byte boundary
-    uint16_t x1 = x < 0 ? 0 : x; // limit
-    uint16_t y1 = y < 0 ? 0 : y; // limit
-    uint16_t w1 = x + w < (uint16_t)WIDTH ? w : (uint16_t)WIDTH - x; // limit
-    uint16_t h1 = y + h < (uint16_t)HEIGHT ? h : (uint16_t)HEIGHT - y; // limit
-    w1 -= x1 - x;
-    h1 -= y1 - y;
+//    x -= x % 8; // byte boundary
+//    w -= x % 8; // byte boundary
+//    uint16_t x1 = x < 0 ? 0 : x; // limit
+//    uint16_t y1 = y < 0 ? 0 : y; // limit
+//    uint16_t w1 = x + w < (uint16_t)WIDTH ? w : (uint16_t)WIDTH - x; // limit
+//    uint16_t h1 = y + h < (uint16_t)HEIGHT ? h : (uint16_t)HEIGHT - y; // limit
+//    w1 -= x1 - x;
+//    h1 -= y1 - y;
     if(use_partial_update_window) SendCommand(&partial_in_cmd); // partial in
-    SetPartialRamArea(x1, y1, w1, h1);
+    SetPartialRamArea(x, y, w, h);
     Update();
     if(use_partial_update_window) SendCommand(&partial_out_cmd); // partial out
 }
@@ -298,42 +304,28 @@ void WriteImage(const uint8_t *bitmap, uint16_t x, uint16_t y, uint16_t w, uint1
     SendCommand(&partial_out_cmd);
 }
 
-void WriteImagePart(const uint8_t* bitmap, uint16_t x_part, uint16_t y_part, uint16_t w_bitmap, uint16_t h_bitmap,
+void WriteImagePart(const uint8_t* bitmap, uint16_t w_bitmap, uint16_t h_bitmap, uint16_t x_start, uint16_t y_start, uint16_t x_end, uint16_t y_end,
                    uint16_t x, uint16_t y, uint16_t w, uint16_t h, bool invert, bool mirror_y){
     if (initial_write) WriteScreenBuffer(0x00); // initial full screen buffer clean
     printf("FIRST TEST");
-    if ((w_bitmap < 0) || (h_bitmap < 0) || (w < 0) || (h < 0)) return;
+    if ((x_end < 0) || (y_end < 0) || (w < 0) || (h < 0)) return;
     printf("SECOND TEST");
-    if ((x_part < 0) || (x_part >= w_bitmap)) return;
+    if ((x_start < 0) || (x_start >= x_end)) return;
     printf("THIRD TEST");
-    if ((y_part < 0) || (y_part >= h_bitmap)) return;
-    printf("BUNCH OF MATH");
-//    int16_t wb_bitmap = (w_bitmap + 7) / 8; // width bytes, bitmaps are padded
-//    x_part -= x_part % 8; // byte boundary
-//    w = w_bitmap - x_part < w ? w_bitmap - x_part : w; // limit
-//    h = h_bitmap - y_part < h ? h_bitmap - y_part : h; // limit
-//    x -= x % 8; // byte boundary
-//    w = 8 * ((w + 7) / 8); // byte boundary, bitmaps are padded
-//    int16_t x1 = x < 0 ? 0 : x; // limit
-//    int16_t y1 = y < 0 ? 0 : y; // limit
-//    int16_t w1 = x + w < (int16_t)WIDTH ? w : (int16_t)WIDTH - x; // limit
-//    int16_t h1 = y + h < (int16_t)HEIGHT ? h : (int16_t)HEIGHT - y; // limit
-//    int16_t dx = x1 - x;
-//    int16_t dy = y1 - y;
-//    w1 -= dx;
-//    h1 -= dy;
+    if ((y_start < 0) || (y_start >= y_end)) return;
     printf("LAST TEST");
-//    if ((x + w <= 0) || (y + h <= 0)) return;
+    if ((x + w <= 0) || (y + h <= 0)) return;
     if (!using_partial_mode) InitPartMode();
     SendCommand(&partial_in_cmd);
-    SetPartialRamArea(x, y, x + w, y + h);
+    SetPartialRamArea(x, y, w, h);
     SendCommand(&data_start_new_cmd);
     int16_t i = 0;
     int16_t j = 0;
-    for (i = y_part; i < h_bitmap; i++){
-        for (j = x_part / 8; j < w_bitmap / 8; j++){
+    int16_t wb_bitmap = w_bitmap / 8;
+    for (i = y_start; i < y_end; i++){
+        for (j = x_start / 8; j < x_end / 8; j++){
             uint8_t data;
-            int16_t idx = j + i * (w_bitmap / 8);
+            int16_t idx = mirror_y ? j + (y_end - 1 - i) * wb_bitmap : j + i * wb_bitmap;
             data = bitmap[idx];
             if (invert) data = ~data;
             SendData(data);
@@ -348,9 +340,9 @@ void DrawImage(const uint8_t* bitmap, uint16_t x, uint16_t y, uint16_t w, uint16
     Refresh(x, y, w, h);
 }
 
-void DrawImagePart(const uint8_t* bitmap, uint16_t x_part, uint16_t y_part, uint16_t w_bitmap, uint16_t h_bitmap,
+void DrawImagePart(const uint8_t* bitmap, uint16_t w_bitmap, uint16_t h_bitmap, uint16_t x_start, uint16_t y_start, uint16_t x_end, uint16_t y_end,
                    uint16_t x, uint16_t y, uint16_t w, uint16_t h, bool invert, bool mirror_y){
-    WriteImagePart(bitmap, x_part, y_part, w_bitmap, h_bitmap, x, y, w, h, invert, mirror_y);
+    WriteImagePart(bitmap, w_bitmap, h_bitmap, x_start, y_start, x_end, y_end, x, y, w, h, invert, mirror_y);
     Refresh(x, y, w, h);
 }
 // </editor-fold>
